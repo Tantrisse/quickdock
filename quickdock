@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+
+set -e
+# debug :
+#set -x
+
+main() {
+    local compose_path=''
+    # try to find the docker-compose.yml file
+    compose_path=$(find_docker_compose)
+    if [ "$compose_path" = '' ]; then
+        # if not found, climb up in folder until we found a composer.json with laravel/framwork required
+        # this way, we search the root folder of the application were docker-compose.yml should be
+        # /!\ THIS IS RISKY /!\ We may found a Laravel project which is not the one we think !
+        climb_to_composer_laravel
+
+        # Now we moved to the root folder, we try to find the docker-compose.yml file again
+        # if it fail, the app stop
+        compose_path=$(find_docker_compose)
+
+        if [ "$compose_path" = '' ]; then
+            logger "ERROR : can't find a docker-compose.y(a)ml file"
+            exit 1
+        fi
+    fi
+
+    local container_name=''
+    # The first parameter if the "type" of container we start
+    # so we fetch the container name based on the first parameter
+    case $1 in
+        artisan | composer)
+            # if artisan or composer, we search a php container
+            container_name=$(extract_php_container_name "$compose_path")
+
+            # if the container is not started, we start it as we will use "docker-compose exec"
+            # and not "run" for performance reasons
+            if ! docker ps | grep -q "$container_name"; then
+                logger "No container found, starting the stack..."
+                msg=$(run_docker_compose_up_cmd "$compose_path")
+                sleep 2
+                logger "Started !"
+            fi
+        ;;
+        yarn)
+            # if yarn, we search a node container
+            container_name=$(extract_node_container_name "$compose_path")
+        ;;
+    esac
+
+    # Based on the first argument, we run the correct command
+    local msg=''
+    case $1 in
+        artisan)
+            msg=$(run_docker_compose_artisan_cmd "$compose_path" "$container_name"  "$*")
+        ;;
+        composer)
+            msg=$(run_docker_compose_composer_cmd "$compose_path" "$container_name"  "$*")
+        ;;
+        yarn)
+            msg=$(run_docker_compose_node_cmd "$compose_path" "$container_name"  "$*")
+        ;;
+        *)
+            msg="Invalid command..."
+        ;;
+    esac
+
+    logger "$msg"
+}
+
+# All the `run_docker_compose_COMMAND_cmd` function need to set the docker-compose.yml file
+# and to set the project directory to the folder of the given file in order to work (fetch the .env file is impacted)
+# Run docker-compose up -d
+run_docker_compose_up_cmd() {
+    do_cmd "docker-compose -f $1 --project-directory $(dirname "$1") up -d"
+}
+# Run docker-compose exec `given container name` php artisan `given command`
+run_docker_compose_artisan_cmd() {
+    do_cmd "docker-compose -f $1 --project-directory $(dirname "$1") exec $2 php $3"
+}
+# Run docker-compose exec `given container name` composer `given command`
+run_docker_compose_composer_cmd() {
+    do_cmd "docker-compose -f $1 --project-directory $(dirname "$1") exec $2 $3"
+}
+# Run docker-compose run --rm --services-ports `given container name` yarn `given command`
+run_docker_compose_node_cmd() {
+    do_cmd "docker-compose -f $1 --project-directory $(dirname "$1") run --rm --service-ports $2 $3"
+}
+# Run a command with buffer to print returned text line by line on the fly
+do_cmd() {
+    stdbuf -oL $1 |
+    while IFS= read -r line
+    do
+        logger "$line"
+    done
+}
+
+extract_php_container_name() {
+    # We search a container which name end by "-php", take the first found and clean all spaces
+    # this mean the container MUST BE named this way
+    grep '\-php:' "$1" | head -n 1 | sed 's/://' | awk '{$1=$1};1'
+}
+extract_node_container_name() {
+    # We search a container which name end by "-node", take the first found and clean all spaces
+    # this mean the container MUST BE named this way
+    grep '\-node:' "$1" | head -n 1 | sed 's/://' | awk '{$1=$1};1'
+}
+find_docker_compose() {
+    # We search for a file named 'docker-compose.y*' to catch the yml and yaml extensions
+    # We keep only the first found !
+    find "$(pwd)" -type f -name 'docker-compose.y*' | head -n 1
+}
+
+climb_to_composer_laravel() {
+    local found=false
+    local composer_file_path
+    while [ $found = false ]; do
+        cd ..
+        # We search a file named composer.json in the current folder WITHOUT going to childrens (were we come from)
+        composer_file_path=$(find "$(pwd)" -maxdepth 1 -type f -name 'composer.json')
+        if [ "$composer_file_path" != '' ]; then
+            # Even if a composer.json is composer.json file is found,
+            # we need it to require laravel/framework in order to use artisan command
+            # TODO : Need to find another way as yarn container don't need Laravel !
+            if grep -q "laravel/framework" "$composer_file_path"; then
+                found=true
+                return 0
+            fi
+        fi
+
+        # If we climbed up to the root of the disk, we stop
+        if [[ $(pwd) = '/' ]]; then
+            logger "ERROR : No composer.json requiring laravel found"
+            exit 1
+        fi
+    done
+}
+
+# This helper is used to print string to stderr without messing with function return
+# https://superuser.com/a/1320694
+# Can /dev/tty be used ?
+logger() {
+    echo "$1" >&2
+}
+
+
+case $1 in
+        artisan | composer | yarn)
+            main "$@"
+
+        ;;
+        help)
+            logger "HELP ME PLEASE !..."
+        ;;
+        *)
+            logger "Invalid command..."
+            logger "The first parameter must be one the list : [ artisan | composer | yarn ]"
+        ;;
+    esac
