@@ -22,6 +22,8 @@ sudo chmod +x /usr/local/bin/quickdock
 
 This helper has 4 "root" commands :
 
+- `quickdock php`
+    - Search for a php container and run the given php command 
 - `quickdock artisan`
     - Search for a php container and run the given artisan command 
 - `quickdock composer`
@@ -56,4 +58,4 @@ If found, we scan it to extrade the container name we have to start based on the
 
 Finally, we run the `docker-composer` command with all the parameters from the `quickdock` command.
 
-Oh, and if the command need a PHP container and it is down, the script will `docker-compose up -d` the stack for you ! :)
+Oh, and if the command need a PHP container, and it is down, the script will `docker-compose up -d` the stack for you ! :)

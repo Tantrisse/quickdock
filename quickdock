@@ -28,7 +28,7 @@ main() {
     # The first parameter if the "type" of container we start
     # so we fetch the container name based on the first parameter
     case $1 in
-        artisan | composer)
+        php | artisan | composer)
             # if artisan or composer, we search a php container
             container_name=$(extract_php_container_name "$compose_path")
 
@@ -50,7 +50,7 @@ main() {
     if [ "$container_name" = '' ]; then
         logger "ERROR : can't find a container for the command : $1"
         case $1 in
-            artisan | composer)
+            php | artisan | composer)
                 logger "Make sure the PHP container name is suffixed by '-php'"
             ;;
             yarn | npm)
@@ -63,8 +63,11 @@ main() {
     # Based on the first argument, we run the correct command
     local msg=''
     case $1 in
+        php)
+            msg=$(run_docker_compose_php_cmd "$compose_path" "$container_name"  "$*")
+        ;;
         artisan)
-            msg=$(run_docker_compose_artisan_cmd "$compose_path" "$container_name"  "$*")
+            msg=$(run_docker_compose_php_cmd "$compose_path" "$container_name"  "php $*")
         ;;
         composer)
             msg=$(run_docker_compose_composer_cmd "$compose_path" "$container_name"  "$*")
@@ -87,8 +90,8 @@ run_docker_compose_up_cmd() {
     do_cmd "docker-compose -f $1 --project-directory $(dirname "$1") up -d"
 }
 # Run docker-compose exec `given container name` php artisan `given command`
-run_docker_compose_artisan_cmd() {
-    do_cmd "docker-compose -f $1 --project-directory $(dirname "$1") exec $2 php $3"
+run_docker_compose_php_cmd() {
+    do_cmd "docker-compose -f $1 --project-directory $(dirname "$1") exec $2 $3"
 }
 # Run docker-compose exec `given container name` composer `given command`
 run_docker_compose_composer_cmd() {
@@ -173,7 +176,7 @@ logger() {
 
 
 case $1 in
-        artisan | composer | yarn | npm)
+        php | artisan | composer | yarn | npm)
             main "$@"
         ;;
         help)
@@ -181,6 +184,6 @@ case $1 in
         ;;
         *)
             logger "Invalid command..."
-            logger "The first parameter must be one the list : [ artisan | composer | yarn | npm ]"
+            logger "The first parameter must be one the list : [ php | artisan | composer | yarn | npm ]"
         ;;
     esac
