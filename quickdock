@@ -122,8 +122,8 @@ extract_node_container_name() {
 }
 find_docker_compose() {
     # We search for a file named 'docker-compose.y*' to catch the yml and yaml extensions
-    # We keep only the first found !
-    find "$(pwd)" -type f -name 'docker-compose.y*' | head -n 1
+    # We search only for file in a "docker" directory. We keep only the first found !
+    find "$(pwd)" -path "$(pwd)/docker*" -type f -name 'docker-compose.y*' | head -n 1
 }
 
 climb_to_composer_laravel() {
