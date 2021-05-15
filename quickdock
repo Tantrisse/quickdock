@@ -45,6 +45,10 @@ main() {
             # if yarn or npm, we search a node container
             container_name=$(extract_node_container_name "$compose_path")
         ;;
+        up)
+            # if yarn or npm, we search a node container
+            container_name="up"
+        ;;
     esac
 
     if [ "$container_name" = '' ]; then
@@ -74,6 +78,9 @@ main() {
         ;;
         yarn | npm)
             msg=$(run_docker_compose_node_cmd "$compose_path" "$container_name"  "$*")
+        ;;
+        up)
+            msg=$(run_docker_compose_up_cmd "$compose_path")
         ;;
         *)
             msg="Invalid command..."
@@ -176,7 +183,7 @@ logger() {
 
 
 case $1 in
-        php | artisan | composer | yarn | npm)
+        php | artisan | composer | yarn | npm | up)
             main "$@"
         ;;
         help)
@@ -184,6 +191,6 @@ case $1 in
         ;;
         *)
             logger "Invalid command..."
-            logger "The first parameter must be one the list : [ php | artisan | composer | yarn | npm ]"
+            logger "The first parameter must be one the list : [ php | artisan | composer | yarn | npm | up]"
         ;;
     esac
